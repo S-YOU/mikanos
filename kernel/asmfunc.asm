@@ -131,16 +131,33 @@ SwitchContext:  ; void SwitchContext(uint64_t* to_rsp, uint64_t* current_rsp);
 
     ret
 
+; #@@range_begin(call_app)
 global CallApp
-CallApp:  ; void CallApp(int argc, char** argv, uint16_t cs, uint16_t ss, uint64_t rip, uint64_t rsp);
+CallApp:  ; int CallApp(int argc, char** argv, uint16_t ss, uint64_t rip, uint64_t rsp, uint64_t* os_stack_ptr);
+    push rbx
+    push rcx
+    push rdx
+    push rdi
+    push rsi
     push rbp
-    mov rbp, rsp
-    push rcx  ; SS
-    push r9   ; RSP
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+    mov [r9], rsp ; OS 用のスタックポインタを保存
+
+    push rdx  ; SS
+    push r8   ; RSP
+    add rdx, 8
     push rdx  ; CS
-    push r8   ; RIP
+    push rcx  ; RIP
     o64 retf
     ; アプリケーションが終了してもここには来ない
+; #@@range_end(call_app)
 
 global WriteMSR
 WriteMSR:  ; void WriteMSR(uint32_t msr, uint64_t value);
@@ -164,6 +181,9 @@ SyscallEntry:  ; void SyscallEntry(void);
     push r8
     push r9
 
+    ; #@@range_begin(jump_exit_app)
+    mov ebx, eax
+
     mov rcx, r10
     and eax, 0x7fffffff
     mov rbp, rsp
@@ -175,6 +195,10 @@ SyscallEntry:  ; void SyscallEntry(void);
 
     mov rsp, rbp
 
+    cmp ebx, 0x80000002
+    je  .exit
+    ; #@@range_end(jump_exit_app)
+
     pop r9
     pop r8
     pop r10
@@ -185,3 +209,26 @@ SyscallEntry:  ; void SyscallEntry(void);
     pop rcx
     pop rbp
     o64 sysret
+
+    ; #@@range_begin(exit_app)
+.exit
+    mov rsp, rax
+    mov eax, edx
+
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rbp
+    pop rsi
+    pop rdi
+    pop rdx
+    pop rcx
+    pop rbx
+
+    ret  ; CallApp の次の行に飛ぶ
+    ; #@@range_end(exit_app)
